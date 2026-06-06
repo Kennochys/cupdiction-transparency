@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '../../../../lib/supabase'
-import { getLivePriceWithFallback } from '../../../../lib/live-prices'
+import { getSettlementPrice } from '../../../../lib/live-prices'
 import { openUpDownWindow, hasOpenWindow } from '../../../../lib/updown'
 import { recordBurnContribution } from '../../../../lib/burn'
 
@@ -30,7 +30,8 @@ async function resolveOne(db, m, now) {
     return { action: 'void', update: { oracle_status: 'voided', resolved_at: now, auto_roll: false, resolution_reason: 'Lock price never captured — stakes refunded.' } }
   }
 
-  const { price: endPrice } = await getLivePriceWithFallback(m.token_mint)
+  // Snipe-resistant: median of recent points, not a single deadline read.
+  const { price: endPrice } = await getSettlementPrice(m.token_mint)
   if (!Number.isFinite(endPrice) || endPrice <= 0) {
     return { action: 'pending_recheck', update: { oracle_status: 'pending_recheck', resolution_reason: 'Price unavailable; retry next cron.' } }
   }

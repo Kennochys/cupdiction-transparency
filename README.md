@@ -43,9 +43,11 @@ organized by what they do, not by where they live in the app.
 - `ledger.sql` — the double-entry ledger model that tracks every balance.
 
 ### `/resolution` — how outcomes are decided (the oracle)
-- `updown-resolve.route.js` — Up/Down: reads the end price from public DexScreener
-  data; higher than the start → UP wins, lower → DOWN wins, flat/missing → void +
-  refund. No subjective calls.
+- `updown-resolve.route.js` — Up/Down: higher than the start → UP wins, lower →
+  DOWN wins, flat/missing → void + refund. No subjective calls.
+- `live-prices.js` — the price feed + `getSettlementPrice()`: settlement uses the
+  MEDIAN of recent price points (not a single deadline read), so a one-tick snipe
+  at the deadline is thrown out as an outlier. Snipe-resistant by design.
 - `pumpfun-resolve.route.js` — Battles: sums each token's DexScreener volume over
   the window, with guards (paired data only, coverage + decisiveness checks) that
   send any unclear result to manual review instead of a coin-flip.
