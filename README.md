@@ -50,15 +50,26 @@ organized by what they do, not by where they live in the app.
   the window, with guards (paired data only, coverage + decisiveness checks) that
   send any unclear result to manual review instead of a coin-flip.
 
+### `/markets` — anti-manipulation: who can host a market
+- `market-guards.js` — the liquidity floor. A token must report real DEX liquidity
+  above the floor (default $20k) to host an Up/Down or Battle market. Thin tokens
+  are cheap to push at settlement, so they're rejected up front — tokens with
+  unknown liquidity don't pass either.
+
 ### `/reserves` — proof we're solvent
 - `reserves.js` — computes Reserves (on-chain escrow balance) vs Liabilities (sum
   of all user balances), and the backing %.
 - `proof-of-reserves.route.js` — the public endpoint behind
   [cupdiction.com/proof-of-reserves](https://cupdiction.com/proof-of-reserves).
+- `solvency-check.route.js` — an automated alarm that runs on a schedule and
+  flags the operator the moment backing dips below 100% (reserves < liabilities).
 
 ### `/withdrawals` — getting your money out
 - `withdraw.route.js` — the self-serve withdrawal flow, signed server-side.
 - `execute-withdrawal.sql` — the matching ledger movement.
+- `withdraw-reconcile.route.js` — resolves any withdrawal stuck "pending": confirms
+  it if it landed, restores your balance if it provably didn't, and never reverses
+  a tx that could still confirm (no double-pay).
 
 ### `/burn-bounties` — the weekly burn mechanic
 - `burn.js` — how each token's weekly Burn Bounty pool accrues from fees.
@@ -79,6 +90,9 @@ organized by what they do, not by where they live in the app.
    from us.
 4. Withdrawals — read `withdrawals/withdraw.route.js`. Funds go to your wallet;
    there is no approval gate.
+5. Manipulation — read `markets/market-guards.js` (thin tokens can't host markets)
+   and the guards in `resolution/pumpfun-resolve.route.js` (paired data, coverage,
+   and a real winning margin, or it goes to manual review — not a coin-flip).
 
 Every secret (keys, RPC endpoints) is read from environment variables — none are
 in this code.
