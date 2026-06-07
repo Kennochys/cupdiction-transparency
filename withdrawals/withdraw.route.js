@@ -13,6 +13,7 @@ import { verifyPrivyToken, getPrivyUser } from '../../../../lib/privy-server'
 import { getPrivySolanaWallet } from '../../../../lib/privy-identity'
 import { SOLANA_RPC_URL, SPL_TOKEN_MINTS } from '../../../../lib/solana-rpc'
 import { FEATURES, featureDisabledResponse } from '../../../../lib/feature-flags'
+import { getSquadsConfig, buildSquadsSplWithdrawal } from '../../../../lib/squads'
 
 export const dynamic = 'force-dynamic'
 
@@ -170,12 +171,29 @@ export async function POST(request) {
         const tokenMeta = SPL_TOKEN_MINTS[asset]
         const mint      = new PublicKey(tokenMeta.mint)
         const units     = toUnits(netAmount, tokenMeta.decimals)
-        const escrowAta = await getAssociatedTokenAddress(mint, escrowPubkey)
-        const userAta   = await getAssociatedTokenAddress(mint, userPubkey)
-        tx.add(
-          createAssociatedTokenAccountIdempotentInstruction(escrowPubkey, userAta, userPubkey, mint),
-          createTransferCheckedInstruction(escrowAta, mint, userAta, escrowPubkey, units, tokenMeta.decimals),
-        )
+        const squads    = getSquadsConfig()
+        if (squads && asset === 'USDC') {
+          // Pay from the Squads vault via the spending limit. Signed by the escrow
+          // key (a multisig member); the on-chain daily cap bounds it. Funds never
+          // sit on a lone hot key, and nobody can move the bulk without 2-of-2.
+          const ixs = await buildSquadsSplWithdrawal({
+            cfg: squads,
+            member: escrowPubkey,
+            mint,
+            decimals: tokenMeta.decimals,
+            amountBaseUnits: Number(units),
+            ownerDestination: userPubkey,
+          })
+          tx.add(...ixs)
+        } else {
+          // Legacy direct transfer from the escrow wallet (pre-Squads / non-USDC).
+          const escrowAta = await getAssociatedTokenAddress(mint, escrowPubkey)
+          const userAta   = await getAssociatedTokenAddress(mint, userPubkey)
+          tx.add(
+            createAssociatedTokenAccountIdempotentInstruction(escrowPubkey, userAta, userPubkey, mint),
+            createTransferCheckedInstruction(escrowAta, mint, userAta, escrowPubkey, units, tokenMeta.decimals),
+          )
+        }
       }
 
       tx.sign(escrowKeypair)

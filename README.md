@@ -68,6 +68,9 @@ organized by what they do, not by where they live in the app.
 
 ### `/withdrawals` — getting your money out
 - `withdraw.route.js` — the self-serve withdrawal flow, signed server-side.
+- `squads.js` — the multisig path: withdrawals are paid from the Squads vault via a
+  capped daily spending limit, so funds leave the vault (not a lone hot key) and no
+  single party can move the bulk.
 - `execute-withdrawal.sql` — the matching ledger movement.
 - `withdraw-reconcile.route.js` — resolves any withdrawal stuck "pending": confirms
   it if it landed, restores your balance if it provably didn't, and never reverses
