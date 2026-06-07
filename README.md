@@ -76,8 +76,9 @@ organized by what they do, not by where they live in the app.
 ### `/burn-bounties` — the weekly burn mechanic
 - `burn.js` — how each token's weekly Burn Bounty pool accrues from fees.
 - `burn-execute.js` — picks the weekly winner and buys + burns it on-chain, with
-  liquidity / spend / slippage guardrails. Funded by platform fees, never by user
-  deposits.
+  liquidity / spend / slippage guardrails plus a hard per-token weekly spend cap
+  (anti-wash: a bounty inflated by wash-trading can only ever burn up to the cap,
+  so farming it isn't worth the cost). Funded by platform fees, never by user deposits.
 
 ---
 

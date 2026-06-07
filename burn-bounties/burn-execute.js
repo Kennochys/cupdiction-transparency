@@ -16,6 +16,7 @@ import { getBountyLeaderboard, weekStart } from './burn'
 const MIN_POOL_USDC       = Number(process.env.BURN_MIN_POOL_USDC || 25)        // don't burn dust
 const MIN_LIQUIDITY_USDC  = Number(process.env.BURN_MIN_LIQUIDITY_USDC || 10000) // token must be liquid
 const MAX_LIQ_FRACTION    = Number(process.env.BURN_MAX_LIQ_FRACTION || 0.02)    // spend ≤2% of liquidity
+const MAX_SPEND_USDC      = Number(process.env.BURN_MAX_SPEND_USDC || 500)       // anti-wash ceiling per token/week
 const SLIPPAGE_BPS        = Number(process.env.BURN_SLIPPAGE_BPS || 300)         // 3%
 const JUP_BASE            = process.env.JUPITER_API_BASE || 'https://quote-api.jup.ag/v6'
 
@@ -54,8 +55,12 @@ export async function pickBurnTarget(week = lastWeekStart()) {
     const m = await fetchDexScreenerTokenMetrics(t.token_mint)
     const liq = Number(m?.liquidityUsd || 0)
     if (liq < MIN_LIQUIDITY_USDC) continue // skip illiquid → next eligible
-    // Cap spend so we don't self-slip / look like manipulation.
-    const spendUsdc = Math.min(t.pool_usdc, liq * MAX_LIQ_FRACTION)
+    // Cap spend three ways: the accrued pool, a fraction of liquidity (anti-slip /
+    // anti-manipulation), and a hard per-token ceiling (anti-wash: even a token
+    // whose pool was inflated by wash-trading can only ever get this much burned,
+    // so farming the bounty is bounded and not worth the wash cost). Excess pool
+    // is simply not spent — it does NOT roll over.
+    const spendUsdc = Math.min(t.pool_usdc, liq * MAX_LIQ_FRACTION, MAX_SPEND_USDC)
     return { winner: t, metrics: m, spendUsdc: +spendUsdc.toFixed(6), liquidityUsd: liq, week }
   }
   return { reason: 'no_eligible_token', week }
