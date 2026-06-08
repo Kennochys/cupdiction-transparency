@@ -35,9 +35,12 @@ organized by what they do, not by where they live in the app.
 > variables and is never in this code.
 
 ### `/settlement` — how pools are split and paid
-- `settle-market.sql` — the settlement function. Computes the winning side, the
-  payout rate, and credits winners. This is the core "who gets paid what" logic.
-- `execute-order.sql` — how a bet is placed: share pricing, the fee, and the debit.
+- `settle-market.sql` — the settlement function. Computes the winning side, takes
+  a 1% rake off the prize pool for the Burn Bounty, and credits winners with the
+  rest. Payouts are capped so the platform never pays out more than it collected.
+  This is the core "who gets paid what" logic.
+- `execute-order.sql` — how a bet is placed: share pricing and the debit. Entry is
+  free (no fee) — the burn is funded by the settlement rake, not a trade fee.
 - `execute-sell.sql` — selling a position back before settlement.
 - `void-market.sql` — voids + full refunds when a market has no fair outcome.
 - `ledger.sql` — the double-entry ledger model that tracks every balance.
@@ -77,11 +80,13 @@ organized by what they do, not by where they live in the app.
   a tx that could still confirm (no double-pay).
 
 ### `/burn-bounties` — the weekly burn mechanic
-- `burn.js` — how each token's weekly Burn Bounty pool accrues from fees.
+- `burn.js` — how each token's weekly Burn Bounty pool accrues: the 1% rake taken
+  off each settled prize pool (returned by `settle-market.sql`) is credited to the
+  token's weekly pool.
 - `burn-execute.js` — picks the weekly winner and buys + burns it on-chain, with
   liquidity / spend / slippage guardrails plus a hard per-token weekly spend cap
   (anti-wash: a bounty inflated by wash-trading can only ever burn up to the cap,
-  so farming it isn't worth the cost). Funded by platform fees, never by user deposits.
+  so farming it isn't worth the cost). Funded by the prize-pool rake, never by user deposits.
 
 ---
 

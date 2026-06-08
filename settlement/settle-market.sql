@@ -34,6 +34,9 @@ declare
   v_total_winner_shares numeric := 0;
   v_payout_rate         numeric := 1.0;
   v_winner_payout       numeric;
+  v_burn_rate           numeric := 0.01;   -- Burn Bounty rake: 1% of the pot
+  v_burn_usdc           numeric := 0;
+  v_distributable       numeric := 0;
 begin
   if p_result not in ('YES', 'NO') then
     raise exception 'invalid result: must be YES or NO';
@@ -70,10 +73,19 @@ begin
     and  side      = p_result
     and  shares    > 0;
 
+  -- Burn Bounty rake (0 entry-fee model): take 1% off the top of the pot to fund
+  -- the weekly burn, then winners split the remainder. Because payout_rate is
+  -- computed on the distributable amount and capped at 1.0, total payouts can
+  -- never exceed (collected - burn) — the platform never pays out more than it
+  -- collected. The rake stays in escrow as the burn obligation (recorded in
+  -- burn_ledger by the resolver) and is returned here as burn_usdc.
+  v_burn_usdc     := round(v_total_collected * v_burn_rate, 6);
+  v_distributable := v_total_collected - v_burn_usdc;
+
   -- Payout rate: $1/share when balanced, prorated when one-sided
   -- LEAST(1.0, ...) ensures platform never pays more than collected
   if v_total_winner_shares > 0 then
-    v_payout_rate := least(1.0, v_total_collected / v_total_winner_shares);
+    v_payout_rate := least(1.0, v_distributable / v_total_winner_shares);
   end if;
 
   -- Mark resolved FIRST so crash+rollback = retryable
@@ -172,7 +184,8 @@ begin
     'total_collected',   v_total_collected,
     'total_winner_shares', v_total_winner_shares,
     'payout_rate',       v_payout_rate,
-    'total_payout',      v_total_payout
+    'total_payout',      v_total_payout,
+    'burn_usdc',         v_burn_usdc
   );
 end;
 $$;

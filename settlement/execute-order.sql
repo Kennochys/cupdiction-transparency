@@ -139,9 +139,12 @@ begin
   v_start_yes := public.lmsr_yes_price_cents(v_price.q_yes, v_price.q_no, v_price.liquidity_b);
   v_start_price := case when p_side = 'YES' then v_start_yes else 100 - v_start_yes end;
 
-  v_fee_rate := 0.04 * (v_start_price / 100) * (1 - (v_start_price / 100));
-  v_fee := round(p_amount * v_fee_rate, 6);
-  v_total_debit := p_amount + v_fee;
+  -- Free entry: no fee to place a bet. The Burn Bounty is funded by a 1% rake on
+  -- the prize pool at settlement instead (see settle_market), so betting is
+  -- frictionless and the platform still never pays out more than it collected.
+  v_fee_rate := 0;
+  v_fee := 0;
+  v_total_debit := p_amount;
 
   -- Serialise concurrent orders from the same user.
   -- market_prices FOR UPDATE above only serialises per-market; without this

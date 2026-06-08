@@ -1,10 +1,9 @@
 import { supabaseAdmin } from './supabase'
 
-// Fraction of a market's collected fees routed to its token's burn pool.
-// V1: no creator/referrer is paid yet, so unclaimed distribution rolls into the
-// burn — we route half of every market's fees to the pool. (V2: a clean
-// 0.5%-of-volume slot once the full fee engine lands.)
-export const BURN_RATE = 0.5
+// Burn funding model: betting is FREE (0 entry fee). The Burn Bounty pool is
+// funded by a 1% rake on the prize pool taken at settlement (see settle_market),
+// returned as burn_usdc and recorded here. Winners split the remaining 99%; the
+// platform never pays out more than it collected.
 
 // UTC week start (Monday 00:00) as YYYY-MM-DD — the weekly burn window key.
 export function weekStart(d = new Date()) {
@@ -14,32 +13,24 @@ export function weekStart(d = new Date()) {
   return dt.toISOString().slice(0, 10)
 }
 
-// Record one settled market's contribution to its token's burn pool. Best-effort
-// and deduped by market_id (a market settles once) so cron re-runs never double
-// count. Safe to call inside a settlement loop — never throws.
-export async function recordBurnContribution(db, { market_id, product, token_mint, token_symbol }) {
+// Record one settled market's burn contribution = the 1% pool rake returned by
+// settle_market (pass it in as burnUsdc). Best-effort and deduped by market_id
+// (a market settles once) so cron re-runs never double count. Never throws.
+export async function recordBurnContribution(db, { market_id, product, token_mint, token_symbol, burnUsdc }) {
   try {
     if (!market_id || !token_mint) return { ok: false }
-    const { data: rows, error } = await db
-      .from('orders')
-      .select('fee')
-      .eq('market_id', market_id)
-      .eq('status', 'filled')
-      .eq('currency', 'USDC')
-    if (error) throw error
-    const fees = (rows || []).reduce((s, r) => s + Number(r.fee || 0), 0)
-    const burnUsdc = +(fees * BURN_RATE).toFixed(6)
+    const burn = +(Number(burnUsdc) || 0).toFixed(6)
     const { error: insErr } = await db.from('burn_ledger').insert({
       market_id,
       product,
       token_mint,
       token_symbol: token_symbol || null,
-      burn_usdc: burnUsdc,
+      burn_usdc: burn,
       week_start: weekStart(),
     })
     // 23505 = already recorded for this market — expected on re-run, ignore.
     if (insErr && insErr.code !== '23505') throw insErr
-    return { ok: true, burnUsdc }
+    return { ok: true, burnUsdc: burn }
   } catch (e) {
     console.warn('[burn] contribution failed', market_id, e?.message)
     return { ok: false }
